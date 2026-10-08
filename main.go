@@ -38,7 +38,7 @@ var (
 		"image/gif":  ".gif",
 		"image/webp": ".webp",
 	}
-	idRe = regexp.MustCompile(`^[a-f0-9]{16}$`)
+	idRe = regexp.MustCompile(`^[a-f0-9]{7}$`)
 )
 
 func loadConfig() {
@@ -116,15 +116,25 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idBytes := make([]byte, 8)
-	if _, err := rand.Read(idBytes); err != nil {
-		jsonErr(w, http.StatusInternalServerError, "id error")
-		return
-	}
-	id := hex.EncodeToString(idBytes)
+	var (
+		id  string
+		dst *os.File
+	)
+	for i := 0; i < 5; i++ {
+		idBytes := make([]byte, 4)
+		if _, err := rand.Read(idBytes); err != nil {
+			jsonErr(w, http.StatusInternalServerError, "id error")
+			return
+		}
+		id = hex.EncodeToString(idBytes)[:7]
 
-	dst, err := os.Create(filepath.Join(uploadDir, id+ext))
-	if err != nil {
+		dst, err = os.OpenFile(filepath.Join(uploadDir, id+ext), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			break
+		}
+		dst = nil
+	}
+	if dst == nil {
 		jsonErr(w, http.StatusInternalServerError, "save error")
 		return
 	}
